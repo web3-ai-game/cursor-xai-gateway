@@ -1,0 +1,114 @@
+# LiteLLM Proxy — OpenAI-compatible reverse proxy for Cursor → xAI
+# Cursor model names (model_name) are aliased to upstream xAI ids.
+# Do not name aliases grok-4.6 / grok-4.5 — those collide with Cursor built-ins
+# (Cursor 內建 Grok 4.6 常被編成 256k，且請求可能根本不進本閘道).
+#
+# Cursor BYOK 對「目錄裡沒有的自訂名」預設當成 1M 窗口，不會去讀 /v1/models。
+# xAI grok-4.6 硬上限是 500k，所以必須：
+#   1) 用 xai-4.6[context=400k] 這種參數化別名，讓 Cursor 在 400k 就 compact
+#   2) model_info.max_input_tokens 低於 500k，預留 reasoning + output
+# Point Cursor's base URL at a public /cursor route in front of this proxy,
+# not at 127.0.0.1. Cursor's cloud agent refuses private-network base URLs.
+# Responses-shaped agent calls (input / flat tools) need that /cursor route,
+# not a plain /v1/chat/completions path.
+
+xai46: &xai46
+  model: xai/grok-4.6
+  api_base: https://api.x.ai/v1
+  api_key: os.environ/XAI_API_KEY
+  drop_params: true
+  timeout: 1800
+  stream_timeout: 1800
+  keepalive_seconds: 15
+
+xai45: &xai45
+  model: xai/grok-4.5
+  api_base: https://api.x.ai/v1
+  api_key: os.environ/XAI_API_KEY
+  drop_params: true
+  timeout: 600
+  stream_timeout: 600
+  keepalive_seconds: 15
+
+# Total window 500k. Reserve ~80k for high-reasoning + tool-call output.
+win46: &win46
+  mode: chat
+  max_tokens: 500000
+  max_input_tokens: 420000
+  max_output_tokens: 65536
+
+win45: &win45
+  mode: chat
+  max_tokens: 500000
+  max_input_tokens: 420000
+  max_output_tokens: 65536
+
+model_list:
+  - model_name: xai-4.6
+    litellm_params:
+      <<: *xai46
+      reasoning_effort: high
+      extra_headers:
+        x-grok-conv-id: cursor-xai-4.6
+    model_info:
+      <<: *win46
+
+  # Cursor 參數化名稱：IDE 用這個當「自訂模型名」，才會在 ~400k 觸發 compact / 進度條
+  # 而不是拖到假的 1M 才爆 xAI 500k。
+  - model_name: "xai-4.6[context=400k]"
+    litellm_params:
+      <<: *xai46
+      reasoning_effort: high
+      extra_headers:
+        x-grok-conv-id: cursor-xai-4.6
+    model_info:
+      <<: *win46
+
+  - model_name: xai-coder
+    litellm_params:
+      <<: *xai46
+      reasoning_effort: medium
+      extra_headers:
+        x-grok-conv-id: cursor-xai-coder
+    model_info:
+      <<: *win46
+
+  - model_name: "xai-coder[context=400k]"
+    litellm_params:
+      <<: *xai46
+      reasoning_effort: medium
+      extra_headers:
+        x-grok-conv-id: cursor-xai-coder
+    model_info:
+      <<: *win46
+
+  - model_name: xai-4.5
+    litellm_params:
+      <<: *xai45
+      reasoning_effort: high
+      extra_headers:
+        x-grok-conv-id: cursor-xai-4.5
+    model_info:
+      <<: *win45
+
+  - model_name: "xai-4.5[context=400k]"
+    litellm_params:
+      <<: *xai45
+      reasoning_effort: high
+      extra_headers:
+        x-grok-conv-id: cursor-xai-4.5
+    model_info:
+      <<: *win45
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 1800
+  stream_timeout: 1800
+  num_retries: 2
+  set_verbose: false
+  # Cloudflare 橙雲閒置 100s 會掐 SSE。high reasoning 第一個 token 常超過 100s。
+  sse_keepalive_ping_interval_seconds: 15
+  callbacks: usage_logger.proxy_handler_instance
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
