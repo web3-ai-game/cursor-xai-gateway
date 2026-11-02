@@ -42,7 +42,7 @@ Listens on `127.0.0.1:4000`. `usage_logger.py` writes one JSONL row per request 
 | 變數 | 用途 |
 |---|---|
 | `XAI_API_KEY` | 上游金鑰。只放在這台機器。Upstream key. This machine only. |
-| `LITELLM_MASTER_KEY` | 代理自己的門禁。預設 `sk-local`，只適合本機。The proxy's own gate. Default `sk-local` is for localhost only. |
+| `LITELLM_MASTER_KEY` | 代理自己的門禁。`.env.example` 留空。沒填時，`start.py` 才在本機行程補一個只給 localhost 的值。The proxy's own gate. `.env.example` is empty. If unset, `start.py` fills a localhost-only value in the process. |
 
 ## 檔案
 
@@ -55,8 +55,4 @@ Listens on `127.0.0.1:4000`. `usage_logger.py` writes one JSONL row per request 
 
 ## 授權
 
-未另附授權檔。看原始碼可以，拿去商用前先來信。
-
-No license file is attached. Reading the source is fine. Ask before commercial use.
-
-聯絡：one@oece-x.com
+[MIT](LICENSE)。這個庫沒有原點位址，也沒有金鑰。
